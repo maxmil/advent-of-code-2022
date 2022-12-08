@@ -2,9 +2,6 @@
   "engines": {
     "node": "18.12.0"
   },
-  "scripts": {
-    "07": "ts-node src/07/07.ts"
-  },
   "devDependencies": {
     "ts-node": "^10.9.1",
     "typescript": "^4.9.3",
