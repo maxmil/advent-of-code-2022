@@ -28,22 +28,16 @@ function countSteps(start: Point, end: Point) {
   let points: Point[] = [start];
   let steps = 0;
   while (true) {
-    if (points.length === 0) {
-      return Number.POSITIVE_INFINITY;
-    }
-    if (points.find(p => p.x === end.x && p.y === end.y)) {
-      return steps;
-    }
-    const nextPoints = points.flatMap(point => {
-      const neighbors = [];
-      if (point.x > 0) neighbors.push(grid[point.x - 1][point.y]);
-      if (point.y > 0) neighbors.push(grid[point.x][point.y - 1]);
-      if (point.x < grid.length - 1) neighbors.push(grid[point.x + 1][point.y]);
-      if (point.y < grid[0].length - 1) neighbors.push(grid[point.x][point.y + 1]);
-      return neighbors.filter(n => n.height <= point.height + 1 && !visited.has(n.coordinates()));
-    });
+    if (points.length === 0) return Number.POSITIVE_INFINITY;
+    if (points.find(p => p.x === end.x && p.y === end.y)) return steps;
+    const nextPoints = points.flatMap(point =>
+      [-1, 1].flatMap(i => [[point.x + i, point.y], [point.x, point.y + i]])
+        .filter(([x, y]) => x >= 0 && x < grid.length && y >= 0 && y < grid[0].length)
+        .map(([x, y]) => grid[x][y])
+        .filter(n => n.height <= point.height + 1 && !visited.has(n.coordinates())),
+    ).filter((value, index, self) => self.indexOf(value) === index);
     points.forEach(p => visited.add(p.coordinates()));
-    points = nextPoints.filter((value, index, self) => self.indexOf(value) === index);
+    points = nextPoints;
     steps++;
   }
 }
