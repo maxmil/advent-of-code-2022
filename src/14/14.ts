@@ -1,100 +1,77 @@
 import fs from 'fs';
 
-type Cell = { row: number, col: number }
+const debug = false;
 
-const walls: Cell[][] = fs.readFileSync('src/14/input.txt', 'utf8')
+type Cell = { x: number, y: number }
+const startPos = { x: 500, y: 0 };
+
+const walls = fs.readFileSync('src/14/input.txt', 'utf8')
   .split('\n')
   .filter(line => line.trim().length > 0)
   .map((line) =>
     line.split(' -> ')
       .map((coords) => {
         const coordinates = coords.split(',');
-        return { row: Number(coordinates[1]), col: Number(coordinates[0]) };
+        return { x: Number(coordinates[0]), y: Number(coordinates[1]) };
       }));
 
-// console.log(walls);
-
-const [minCol, maxCol, maxRow] = walls.flatMap((wall) => wall).reduce(([minCol, maxCol, maxRow], cell) => {
-  return [
-    Math.min(minCol, cell.col),
-    Math.max(maxCol, cell.col),
-    Math.max(maxRow, cell.row),
-  ];
-}, [Number.POSITIVE_INFINITY, 0, 0]);
-
-// console.log(minCol, maxCol, maxRow)
+function createCave(extraRows = 0) {
+  const maxY = walls.flatMap((wall) => wall).reduce((maxY, cell) => Math.max(maxY, cell.y + extraRows), 0);
+  const maxX = startPos.x + maxY;
+  const cave = [...new Array(maxY + 1)].map(_ => new Array(maxX + 1).fill('.'));
+  walls.forEach(vertices => addWall(vertices, cave));
+  return cave;
+}
 
 function drawCave(cave: string[][]) {
   let output = '';
-  cave.forEach(cols => {
-    cols.forEach((cell, i) => {
-      if (i >= minCol) output += cell;
-    });
+  cave.forEach(row => {
+    row.forEach((cell, i) => output += (i > startPos.x - cave.length) ? cell : '');
     output += '\n';
   });
-  console.log(output);
+  if (debug) console.log(output);
 }
 
 function addWall(wall: Cell[], cave: string[][]) {
-  let lastVertex = wall[0];
-  cave[lastVertex.row][lastVertex.col] = '#';
+  let prevVertex = wall[0];
+  cave[prevVertex.y][prevVertex.x] = '#';
   wall.slice(1).forEach(vertex => {
-    const distY = vertex.row - lastVertex.row;
-    const distX = vertex.col - lastVertex.col;
-    if (distX !== 0) {
-      let col = lastVertex.col;
-      do {
-        col = distX > 0 ? col + 1 : col - 1;
-        cave[lastVertex.row][col] = '#';
-      } while (vertex.col != col);
-    } else if (distY !== 0) {
-      let row = lastVertex.row;
-      do {
-        row = distY > 0 ? row + 1 : row - 1;
-        cave[row][lastVertex.col] = '#';
-      } while (vertex.row != row);
-    }
-    lastVertex = vertex;
+    const distX = vertex.x - prevVertex.x;
+    const distY = vertex.y - prevVertex.y;
+    const incX = distX > 0 ? 1 : distX < 0 ? -1 : 0;
+    const incY = distY > 0 ? 1 : distY < 0 ? -1 : 0;
+    let pos = prevVertex;
+    do {
+      pos = { x: pos.x + incX, y: pos.y + incY };
+      cave[pos.y][pos.x] = '#';
+    } while (vertex.x != pos.x || vertex.y != pos.y);
+    prevVertex = vertex;
   });
 }
 
-function addWalls(cave: string[][]) {
-  walls.forEach(vertices => addWall(vertices, cave));
-}
-
 function isInTheVoid(cell: Cell, cave: string[][]) {
-  return cell.row > maxRow || cell.col < minCol || cell.col > maxCol;
+  return cell.y >= cave.length;
 }
 
 function dropSand(cave: string[][]): Cell {
-  let pos = { row: 0, col: 500 };
+  let pos = startPos;
   while (true) {
-    const down = { row: pos.row + 1, col: pos.col };
-    if (isInTheVoid(down, cave)) return down;
-    if (cave[down.row][down.col] === '.') {
-      pos = down;
-      continue;
+    const next = [
+      { x: pos.x, y: pos.y + 1 },
+      { x: pos.x - 1, y: pos.y + 1 },
+      { x: pos.x + 1, y: pos.y + 1 },
+    ].filter(cell => isInTheVoid(cell, cave) || cave[cell.y][cell.x] === '.');
+    if (next.length === 0) {
+      cave[pos.y][pos.x] = 'o';
+      return pos;
     }
-    const downLeft = { row: pos.row + 1, col: pos.col - 1 };
-    if (isInTheVoid(downLeft, cave)) return downLeft;
-    if (cave[downLeft.row][downLeft.col] === '.') {
-      pos = downLeft;
-      continue;
-    }
-    const downRight = { row: pos.row + 1, col: pos.col + 1 };
-    if (isInTheVoid(downRight, cave)) return downRight;
-    if (cave[downRight.row][downRight.col] === '.') {
-      pos = downRight;
-      continue;
-    }
-    cave[pos.row][pos.col] = 'o';
-    return pos;
+    pos = next[0];
+    if (isInTheVoid(pos, cave)) return pos;
   }
 }
 
 function part1() {
-  const cave: string[][] = [...new Array(maxRow + 1)].map(_ => new Array(maxCol + 1).fill('.'));
-  addWalls(cave);
+  const cave = createCave();
   let sand = 0;
   while (!isInTheVoid(dropSand(cave), cave)) sand++;
   drawCave(cave);
@@ -102,32 +79,21 @@ function part1() {
 }
 
 function part2() {
-  const [minCol, maxCol, maxRow] = walls.flatMap((wall) => wall).reduce(([minCol, maxCol, maxRow], cell) => {
-    return [
-      Math.min(minCol, cell.col - cell.row - 2),
-      Math.max(maxCol, cell.col + cell.row + 2),
-      Math.max(maxRow, cell.row + 2),
-    ];
-  }, [Number.POSITIVE_INFINITY, 0, 0]);
-  const cave: string[][] = [...new Array(maxRow + 1)].map(_ => new Array(maxCol + 1).fill('.'));
-  addWalls(cave);
+  const cave = createCave(2);
   addWall([
-    { row: maxRow, col: minCol},
-    { row: maxRow, col: maxCol},
+    { x: startPos.y - cave.length + 1, y: cave.length - 1 },
+    { x: cave[0].length - 1, y: cave.length - 1 },
   ], cave);
-
   let sand = 0;
-  while(cave[0][500] === '.'){
+  while (cave[startPos.y][startPos.x] === '.') {
     dropSand(cave);
-    drawCave(cave);
-    sand ++;
+    sand++;
   }
   drawCave(cave);
   console.log(`Part 2: ${sand}`);
 }
 
-
-// part1();
+part1();
 part2();
 
 
