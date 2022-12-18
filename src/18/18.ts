@@ -32,7 +32,7 @@ function getAdjacent(cell: Cell): Cell[] {
   ];
 }
 
-let openFaces = new Set<Cell>();
+const openFaces = new Set<Cell>();
 Array.from(droplet.entries()).forEach(([x, cols]) =>
   Array.from(cols.entries()).forEach(([y, depths]) =>
     depths.forEach((z =>
