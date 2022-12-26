@@ -132,3 +132,6 @@ if(endQuadrant === 2) {
 //194292
 //158092
 //157092
+
+// My result is password = 157092 { row: 156, col: 22, direction: Right }
+// Correct result is password = 189097 { row: 188, col: 23, direction: Down} 
