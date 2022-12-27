@@ -43,21 +43,30 @@ function blizzardMoves(rowIndex: number, colIndex: number, cell: Cell): Move[] {
 }
 
 function moveBlizzards() {
-  const moves = valley.reduce((moves, row, rowIndex) => [...moves, ...row.reduce((moves: Move[], col, colIndex) => [...moves, ...blizzardMoves(rowIndex, colIndex, col)], [])], [] as Move[]);
+  const moves = valley.reduce(
+    (moves, row, rowIndex) => [...moves, ...row.reduce((moves: Move[], col, colIndex) => [...moves, ...blizzardMoves(rowIndex, colIndex, col)], [])],
+    [] as Move[],
+  );
   moves.forEach((move) => (valley[move.from.row][move.from.col] as Set<Blizzard>).delete(move.blizzard));
   moves.forEach((move) => (valley[move.to.row][move.to.col] as Set<Blizzard>).add(move.blizzard));
 }
 
-function nextPositions(position: Position) {
-  return [position, { ...position, row: position.row - 1 }, { ...position, row: position.row - 1 }, { ...position, row: position.col + 1 }, { ...position, row: position.col - 1 }].filter((p) => {
-    if (p.row < 0) return false;
-    const cell = valley[p.row][p.col];
-    return !isWall(cell) && cell.size === 0;
-  });
+function isExitPosition(position: Position) {
+  return position.row === exitPosition.row && position.col === exitPosition.col;
+}
+
+function nextPositions(position: Position, state: Set<string>) {
+  return [
+    { ...position, row: position.row + 1 },
+    { ...position, col: position.col + 1 },
+    position,
+    { ...position, row: position.row - 1 },
+    { ...position, col: position.col - 1 },
+  ].filter((p) => state.has(`${p.row},${p.col}`) || isExitPosition(p));
 }
 
 const valley: Cell[][] = fs
-  .readFileSync('src/24/input_test.txt', 'utf-8')
+  .readFileSync('src/24/input.txt', 'utf-8')
   .split('\n')
   .reduce(
     (rows: Cell[][], row) => [
@@ -71,21 +80,39 @@ const valley: Cell[][] = fs
     [],
   );
 
-const width = valley[0].length;
-const height = valley.length;
+function move(position: Position, step: number) {
+  if (step > shortest) return;
+  if (isExitPosition(position)) {
+    shortest = Math.min(shortest, step);
+    return;
+  }
 
-let positions = [{ row: 0, col: 1 }];
-let step = 0
-while (true) {
-    step ++
+  const key = `${position.row},${position.col},${step}`;
+  if (visited.has(key)) return;
+  visited.add(key);
+
+  let state = valleyState.get(step);
+  if (state === undefined) {
     moveBlizzards();
-    positions = positions.flatMap(position => nextPositions(position))
-    console.log(step, positions.length)
-    if (positions.find(p => p.row === height && p.col === width - 2)){
-        break;
-    }
+    state = new Set(
+      valley.flatMap(
+        (row, rowIndex) =>
+          row.map((cell, colIndex) => (!isWall(cell) && cell.size === 0 ? `${rowIndex},${colIndex}` : undefined)).filter((s) => s !== undefined) as string[],
+      ),
+    );
+    valleyState.set(step, state);
+  }
+
+  nextPositions(position, state).forEach((p) => move(p, step + 1));
 }
 
-console.log(`Part 1: ${step}`)
 
-// drawValley();
+const valleyState = new Map<number, Set<string>>();
+const visited = new Set<string>();
+const width = valley[0].length;
+const height = valley.length;
+const exitPosition = { row: height - 1, col: width - 2 };
+let shortest = 1000;
+
+move({ row: 0, col: 1 }, 0);
+console.log(`Part 1: ${shortest}`);
