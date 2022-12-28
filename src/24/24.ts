@@ -51,18 +51,17 @@ function moveBlizzards() {
   moves.forEach((move) => (valley[move.to.row][move.to.col] as Set<Blizzard>).add(move.blizzard));
 }
 
-function isExitPosition(position: Position) {
-  return position.row === exitPosition.row && position.col === exitPosition.col;
-}
-
-function nextPositions(position: Position, state: Set<string>) {
+function nextPositions(position: Position, end: Position, state: Set<string>) {
+  const y = (end.row - position.row) >= 0 ? 1 : -1
+  const x = (end.col - position.col) >= 0 ? 1 : -1
   return [
-    { ...position, row: position.row + 1 },
-    { ...position, col: position.col + 1 },
+    { ...position, row: position.row + y },
+    { ...position, col: position.col + x },
     position,
-    { ...position, row: position.row - 1 },
-    { ...position, col: position.col - 1 },
-  ].filter((p) => state.has(`${p.row},${p.col}`) || isExitPosition(p));
+    { ...position, row: position.row - y },
+    { ...position, col: position.col - x },
+  ].filter((p) => state.has(`${p.row},${p.col}`) || 
+    (p.row === end.row && p.col === end.col));
 }
 
 const valley: Cell[][] = fs
@@ -80,39 +79,46 @@ const valley: Cell[][] = fs
     [],
   );
 
-function move(position: Position, step: number) {
-  if (step > shortest) return;
-  if (isExitPosition(position)) {
-    shortest = Math.min(shortest, step);
-    return;
+function findShortestPath(start: Position, step:number, end: Position):number {
+  function move(position: Position, step: number): number | undefined {
+    if (step > shortest) return undefined;
+    if (position.row === end.row && position.col === end.col) {
+      shortest = Math.min(shortest, step);
+      return step;
+    }
+
+    const key = `${position.row},${position.col},${step}`;
+    if (visited.has(key)) return visited.get(key);
+
+    let state = valleyState.get(step);
+    if (state === undefined) {
+      moveBlizzards();
+      state = new Set(
+        valley.flatMap(
+          (row, rowIndex) =>
+            row.map((cell, colIndex) => (!isWall(cell) && cell.size === 0 ? `${rowIndex},${colIndex}` : undefined)).filter((s) => s !== undefined) as string[],
+        ),
+      );
+      valleyState.set(step, state);
+    }
+
+    const steps = nextPositions(position, end, state).reduce((shortest, p) => Math.min(shortest, move(p, step + 1) ?? shortest), Number.POSITIVE_INFINITY);
+    visited.set(key, Math.min(visited.get(key) ?? steps, steps));
+    return steps
   }
 
-  const key = `${position.row},${position.col},${step}`;
-  if (visited.has(key)) return;
-  visited.add(key);
-
-  let state = valleyState.get(step);
-  if (state === undefined) {
-    moveBlizzards();
-    state = new Set(
-      valley.flatMap(
-        (row, rowIndex) =>
-          row.map((cell, colIndex) => (!isWall(cell) && cell.size === 0 ? `${rowIndex},${colIndex}` : undefined)).filter((s) => s !== undefined) as string[],
-      ),
-    );
-    valleyState.set(step, state);
-  }
-
-  nextPositions(position, state).forEach((p) => move(p, step + 1));
+  const visited = new Map<string, number>();
+  let shortest = 1000;
+  return move(start, step)!;
 }
 
-
 const valleyState = new Map<number, Set<string>>();
-const visited = new Set<string>();
 const width = valley[0].length;
 const height = valley.length;
-const exitPosition = { row: height - 1, col: width - 2 };
-let shortest = 1000;
 
-move({ row: 0, col: 1 }, 0);
-console.log(`Part 1: ${shortest}`);
+const stepsToExit = findShortestPath({ row: 0, col: 1 }, 0, { row: height - 1, col: width - 2 });
+console.log(`Part 1: ${stepsToExit}`);
+
+const stepsBackToBeginning = findShortestPath({ row: height - 1, col: width - 2 }, stepsToExit, { row: 0, col: 1 });
+const stepsBackToExit = findShortestPath({ row: 0, col: 1 }, stepsBackToBeginning, { row: height - 1, col: width - 2 });
+console.log(`Part 2: ${stepsBackToExit}`)
