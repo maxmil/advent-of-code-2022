@@ -18,15 +18,15 @@ type BluePrint = {
   robotPrices:Map<Material, Price[]>[]
 }
 
-const bluePrints = new Map(fs.readFileSync('src/19/input_test.txt', 'utf-8')
-  .split('\n\n')
+const bluePrints = new Map(fs.readFileSync('src/19/input.txt', 'utf-8')
+  .split('\n')
   .map((recipe, index) => {
     const robotPrices = new Map();
-    recipe.split('\n').slice(1).map((line, index) => {
+    recipe.split('.').slice(0, -1).map((line, index) => {
       const robotPrice = line.match(/\d+ [a-z]+/g)?.map(match => {
         const parts = match.split(' ')
         const quantity = Number(parts[0])
-        const material = Material[["ore", "clay", "obsidean"].indexOf(parts[1]) + 1]
+        const material = Material[["ore", "clay", "obsidian"].indexOf(parts[1]) + 1]
         return {material, quantity}
       })
       robotPrices.set(Material[index + 1], robotPrice)
