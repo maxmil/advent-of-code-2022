@@ -1,3 +1,4 @@
+import { time } from 'console';
 import fs from 'fs';
 import { maxHeaderSize } from 'http';
 import * as util from 'util';
@@ -16,15 +17,23 @@ type Price = {
 
 type BluePrint = {
   robotPrices: Map<Material, Price[]>;
-  maxPrices: Map<Material, number>;
+  maxPrices: MaterialMap;
 };
 
-function collectResources(minutes: number, maxPrices: Map<Material, number>, robots: Map<Material, number>, resources: Map<Material, number>) {
-  // console.log('before', util.inspect(resources, {depth: 2}))
-  const collected = new Map(
+class MaterialMap extends Map<Material, number> {
+  getOrDefault(material: Material, defaultValue = 0) {
+    return this.get(material) ?? defaultValue;
+  }
+}
+
+function collectResources(minutes: number, maxPrices: MaterialMap, robots: MaterialMap, resources: MaterialMap) {
+  // console.log('before', util.inspect(resources, { depth: 2 }));
+  const collected = new MaterialMap(
     Array.from(robots.entries()).map(([material, quantity]) => {
-      const total = (resources.get(material) ?? 0) + quantity
-      const spendable = (maxPrices.get(material)! * (minutes + 1)) - (quantity * (minutes - 1)) 
+      const total = resources.getOrDefault(material) + quantity;
+      const spendable = maxPrices.getOrDefault(material) * (minutes + 1) - quantity * (minutes - 1);
+      // console.log(material, util.inspect(resources, { depth: 2 }), resources.getOrDefault(material), Math.min(total, spendable) )
+      // process.exit()
       return [material, Math.min(total, spendable)];
     }),
   );
@@ -32,55 +41,56 @@ function collectResources(minutes: number, maxPrices: Map<Material, number>, rob
   return collected;
 }
 
-function maxGeodes(
-  bluePrint: BluePrint,
-  minutes: number,
-  visited: Map<string, number>,
-  robots: Map<Material, number>,
-  resources: Map<Material, number>,
-  history: string[]
-): number {
-
+function maxGeodes(bluePrint: BluePrint, minutes: number, visited: Map<string, number>, robots: MaterialMap, resources: MaterialMap): number {
   if (minutes === 0) {
     // if (collected.get(Material.Geode) === 9) {
     //   console.log(history.join('\n'))
     //   console.log("")
     // }
-    return resources.get(Material.Geode) ?? 0;
+    const geodes = resources.getOrDefault(Material.Geode);
+    // if (geodes > maxFound) console.log(geodes)
+    maxFound = Math.max(maxFound, geodes);
+    return geodes;
   }
 
   const key = `${minutes}|${Array.from(robots.values()).join(',')}|${Array.from(resources.values()).join(',')}`;
   if (visited.has(key)) return visited.get(key)!;
 
-  // console.log(key)
-  history = [...history, key]
-
   const collected = collectResources(minutes, bluePrint.maxPrices, robots, resources);
 
+  const possibleGeodes = (collected.get(Material.Geode) ?? 0) + (robots.get(Material.Geode) ?? 0) * minutes + (minutes * (minutes + 1)) / 2;
+  if (possibleGeodes < maxFound) {
+    // console.log('early return')
+    return 0;
+  }
+
   const geodes = [Material.Geode, Material.Obsidian, Material.Clay, Material.Ore, null]
-    .filter((material) => material === null || bluePrint.robotPrices.get(material)!.find(price => (resources.get(price.material) ?? 0) < price.quantity) === undefined)
+    .filter(
+      (material) =>
+        material === null || bluePrint.robotPrices.get(material)!.find((price) => (resources.get(price.material) ?? 0) < price.quantity) === undefined,
+    )
     .filter((material) => material === null || (robots.get(material) ?? 0) < bluePrint.maxPrices.get(material)!)
     .map((material) => {
-      if (material === null) return maxGeodes(bluePrint, minutes - 1, visited, robots, collected, history);
-      const prices = bluePrint.robotPrices.get(material)!
-      const robotsAfterBuying = new Map(robots);
+      if (material === null) return maxGeodes(bluePrint, minutes - 1, visited, robots, collected);
+      const prices = bluePrint.robotPrices.get(material)!;
+      const robotsAfterBuying = new MaterialMap(robots);
       robotsAfterBuying.set(material, (robots.get(material) ?? 0) + 1);
-      const resourcesAfterBuying = new Map(collected);
+      const resourcesAfterBuying = new MaterialMap(collected);
       prices.forEach((price) => resourcesAfterBuying.set(price.material, resourcesAfterBuying.get(price.material)! - price.quantity));
-      return maxGeodes(bluePrint, minutes - 1, visited, robotsAfterBuying, resourcesAfterBuying, history);
+      return maxGeodes(bluePrint, minutes - 1, visited, robotsAfterBuying, resourcesAfterBuying);
     })
     .reduce((max, geodes) => Math.max(max, geodes), 0);
-  
+
   visited.set(key, geodes);
   return geodes;
 }
 
 const bluePrints = fs
-  .readFileSync('src/19/input_test.txt', 'utf-8')
+  .readFileSync('src/19/input.txt', 'utf-8')
   .split('\n')
   .map((recipe) => {
     const robotPrices = new Map<Material, Price[]>();
-    const maxPrices = new Map<Material, number>([[Material.Geode, Number.POSITIVE_INFINITY]]);
+    const maxPrices = new MaterialMap([[Material.Geode, Number.POSITIVE_INFINITY]]);
     recipe
       .split('.')
       .slice(0, -1)
@@ -97,11 +107,12 @@ const bluePrints = fs
     return { robotPrices, maxPrices };
   });
 
-console.log(util.inspect(bluePrints.slice(1, 2), {depth: 4}))
+let maxFound = 0;
 
 const qualityLevelSum = bluePrints
   .map((bluePrint, index) => {
-    const geodes = maxGeodes(bluePrint, 24, new Map<string, number>(), new Map([[Material.Ore, 1]]), new Map(), []);
+    maxFound = 0;
+    const geodes = maxGeodes(bluePrint, 24, new Map(), new MaterialMap([[Material.Ore, 1]]), new MaterialMap());
     console.log(index + 1, geodes);
     return geodes;
   })
@@ -109,14 +120,14 @@ const qualityLevelSum = bluePrints
 
 console.log(`Part 1: ${qualityLevelSum}`);
 
+const geodeProductFirstThree = bluePrints
+  .slice(0, 3)
+  .map((bluePrint, index) => {
+    maxFound = 0;
+    const geodes = maxGeodes(bluePrint, 32, new Map(), new MaterialMap([[Material.Ore, 1]]), new MaterialMap());
+    console.log(index + 1, geodes);
+    return geodes;
+  })
+  .reduce((product, maxGeodes) => product * maxGeodes, 1);
 
-// const geodeProductFirstThree = bluePrints
-//   // .slice(0, 3)
-//   .map((bluePrint, index) => {
-//     const geodes = maxGeodes(bluePrint, 32, new Map<string, number>(), new Map([[Material.Ore, 1]]), new Map(), []);
-//     console.log(index + 1, geodes);
-//     return geodes;
-//   })
-//   .reduce((product, maxGeodes) => product * maxGeodes, 1);
-
-// console.log(`Part 2: ${geodeProductFirstThree}`);
+console.log(`Part 2: ${geodeProductFirstThree}`);
